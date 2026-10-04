@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#5a9e3e" />
+    <title>Bradley France - Full Stack Developer Portfolio</title>
+    <meta
+      name="description"
+      content="The interactive portfolio of Bradley France, a full stack developer. Explore a playable Old School RuneScape style village built with Three.js and TypeScript to browse my CV, projects and skills."
+    />
+    <link rel="canonical" href="https://bradthedev.co.uk/" />
+
+    <!-- Open Graph (LinkedIn, Facebook, Slack) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Bradley France" />
+    <meta property="og:title" content="Bradley France - Full Stack Developer Portfolio" />
+    <meta
+      property="og:description"
+      content="A playable Old School RuneScape style village, built with Three.js and TypeScript. Walk around to explore my CV, projects and skills."
+    />
+    <meta property="og:url" content="https://bradthedev.co.uk/" />
+    <meta property="og:image" content="https://bradthedev.co.uk/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="A top-down view of the interactive portfolio village." />
+
+    <!-- Twitter / X card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Bradley France - Full Stack Developer Portfolio" />
+    <meta
+      name="twitter:description"
+      content="A playable Old School RuneScape style village, built with Three.js and TypeScript."
+    />
+    <meta name="twitter:image" content="https://bradthedev.co.uk/og-image.png" />
+
+    <!--
+      Critical, inlined styles so the boot loader paints on the very first frame,
+      before the JS bundle (which imports the full stylesheet) has loaded. This
+      opaque full-screen loader also hides the unstyled fallback markup, so there
+      is no flash of unstyled content on a cold refresh.
+    -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #1a1410;
+      }
+      #boot-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 200;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        background: #1a1410;
+        color: #e8dcc0;
+        font-family: 'Trebuchet MS', Verdana, Geneva, sans-serif;
+        transition: opacity 0.5s ease;
+      }
+      #boot-loader.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .boot-spinner {
+        width: 44px;
+        height: 44px;
+        border: 4px solid #474745;
+        border-top-color: #ffd95a;
+        border-radius: 50%;
+        animation: boot-spin 0.9s linear infinite;
+      }
+      .boot-text {
+        margin: 0;
+        font-size: 15px;
+        letter-spacing: 0.02em;
+      }
+      @keyframes boot-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-spinner {
+          animation: none;
+          border-top-color: #474745;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="game-container"></div>
+      <a id="skip-link" href="#plain-site">Skip to text version</a>
+    </div>
+
+    <div id="boot-loader" role="status" aria-live="polite">
+      <div class="boot-spinner" aria-hidden="true"></div>
+      <p class="boot-text">Loading the village...</p>
+    </div>
+
+    <div id="plain-site" class="hidden" aria-hidden="true">
+      <div class="plain-inner">
+        <button id="close-plain" aria-label="Back to the village">&larr; Back to the village</button>
+        <div id="plain-content"></div>
+      </div>
+    </div>
+
+    <noscript>
+      <h1>Portfolio</h1>
+      <p>
+        This site is an interactive village and needs JavaScript enabled to run. Please enable JavaScript.
+      </p>
+    </noscript>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
