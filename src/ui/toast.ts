@@ -1,4 +1,5 @@
 let toastEl: HTMLDivElement | null = null;
+let hideTimer: ReturnType<typeof setTimeout> | undefined;
 
 export function showToast(message: string, duration = 3000) {
   if (!toastEl) {
@@ -25,8 +26,8 @@ export function showToast(message: string, duration = 3000) {
   toastEl.style.opacity = '1';
   toastEl.style.display = 'block';
 
-  window.clearTimeout((toastEl as any)._hideTimer);
-  (toastEl as any)._hideTimer = window.setTimeout(() => {
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(() => {
     if (toastEl) toastEl.style.opacity = '0';
   }, duration);
 }
