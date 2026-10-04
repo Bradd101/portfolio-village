@@ -314,8 +314,14 @@ export class Village {
   private playerShirtMat!: THREE.MeshStandardMaterial;
   private playerSkinMat!: THREE.MeshStandardMaterial;
   private playerArmPivot!: THREE.Object3D;
+  private playerArmPivotL!: THREE.Object3D;
+  private playerLegL!: THREE.Object3D;
+  private playerLegR!: THREE.Object3D;
   private playerHead!: THREE.Mesh;
   private playerTorso!: THREE.Mesh;
+  // Walk animation + movement easing state.
+  private walkPhase = 0;
+  private currentSpeed = 0;
   private playerLabel!: THREE.Sprite;
   private playerName = 'Adventurer';
   // one attached mesh per equipment slot (null when that slot is empty)
@@ -1671,6 +1677,9 @@ export class Village {
     shirtMat: THREE.MeshStandardMaterial;
     skinMat: THREE.MeshStandardMaterial;
     rightArmPivot: THREE.Group;
+    leftArmPivot: THREE.Group;
+    legL: THREE.Group;
+    legR: THREE.Group;
     head: THREE.Mesh;
     torso: THREE.Mesh;
   } {
@@ -1688,24 +1697,26 @@ export class Village {
 
     const legsH = 0.6;
 
-    // Two tapered legs (cylinders) instead of one block.
+    // Two tapered legs, each hinged at the hip inside a pivot group so they can
+    // swing through a walk cycle. The rounded boot rides at the foot of the leg.
     const legGeo = new THREE.CylinderGeometry(0.1, 0.12, legsH, 10);
-    const legL = new THREE.Mesh(legGeo, pants);
-    legL.position.set(-0.12, legsH / 2, 0);
-    legL.castShadow = true;
-    const legR = legL.clone();
-    legR.position.x = 0.12;
-    group.add(legL, legR);
-
-    // Rounded boots (flattened spheres).
     const bootGeo = new THREE.SphereGeometry(0.15, 10, 8);
-    const bootL = new THREE.Mesh(bootGeo, bootMat);
-    bootL.scale.set(1, 0.6, 1.3);
-    bootL.position.set(-0.12, 0.06, 0.04);
-    bootL.castShadow = true;
-    const bootR = bootL.clone();
-    bootR.position.x = 0.12;
-    group.add(bootL, bootR);
+    const makeLeg = (x: number) => {
+      const pivot = new THREE.Group();
+      pivot.position.set(x, legsH, 0); // hinge at the hip
+      const leg = new THREE.Mesh(legGeo, pants);
+      leg.position.y = -legsH / 2;
+      leg.castShadow = true;
+      const boot = new THREE.Mesh(bootGeo, bootMat);
+      boot.scale.set(1, 0.6, 1.3);
+      boot.position.set(0, -legsH + 0.06, 0.04);
+      boot.castShadow = true;
+      pivot.add(leg, boot);
+      group.add(pivot);
+      return pivot;
+    };
+    const legL = makeLeg(-0.12);
+    const legR = makeLeg(0.12);
 
     // Torso: a smooth cylinder that tapers from broad shoulders to a narrower waist.
     const torsoH = 0.62;
@@ -1729,14 +1740,16 @@ export class Village {
     group.add(shoulderL, shoulderR);
 
     const armGeo = new THREE.CylinderGeometry(0.075, 0.065, torsoH * 0.92, 10);
+    // Left arm on its own shoulder pivot so it can counter-swing while walking.
+    const leftArmPivot = new THREE.Group();
+    leftArmPivot.position.set(-0.3, torso.position.y + torsoH * 0.4, 0);
     const armL = new THREE.Mesh(armGeo, shirt);
-    armL.position.set(-0.3, torso.position.y - 0.02, 0);
+    armL.position.y = -torsoH * 0.44;
     armL.castShadow = true;
-    group.add(armL);
-
     const handL = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6), skin);
-    handL.position.set(-0.3, torso.position.y - torsoH * 0.46, 0);
-    group.add(handL);
+    handL.position.y = -torsoH * 0.88;
+    leftArmPivot.add(armL, handL);
+    group.add(leftArmPivot);
 
     // Right arm: pivot at the shoulder, arm hanging below it, so rotating the
     // pivot swings the whole arm like a hinge for chopping and fishing.
@@ -1779,7 +1792,7 @@ export class Village {
     hairCap.position.y = head.position.y + 0.01;
     group.add(hairCap);
 
-    return { group, shirtMat: shirt, skinMat: skin, rightArmPivot, head, torso };
+    return { group, shirtMat: shirt, skinMat: skin, rightArmPivot, leftArmPivot, legL, legR, head, torso };
   }
 
   private buildNpc() {
@@ -1802,11 +1815,15 @@ export class Village {
   }
 
   private buildPlayer() {
-    const { group, shirtMat, skinMat, rightArmPivot, head, torso } = this.makePersonGroup(0xe58b3c);
+    const { group, shirtMat, skinMat, rightArmPivot, leftArmPivot, legL, legR, head, torso } =
+      this.makePersonGroup(0xe58b3c);
     this.player = group;
     this.playerShirtMat = shirtMat;
     this.playerSkinMat = skinMat;
     this.playerArmPivot = rightArmPivot;
+    this.playerArmPivotL = leftArmPivot;
+    this.playerLegL = legL;
+    this.playerLegR = legR;
     this.playerHead = head;
     this.playerTorso = torso;
     this.player.position.set(0, 0, 8);
@@ -2642,27 +2659,8 @@ export class Village {
   }
 
   private updatePlayer(delta: number) {
-    if (this.moveTarget) {
-      const dx = this.moveTarget.x - this.player.position.x;
-      const dz = this.moveTarget.y - this.player.position.z;
-      const dist = Math.hypot(dx, dz);
-      if (dist > 0.08) {
-        const boosted = this.clock.elapsedTime < this.speedBoostUntil;
-        const speed = PLAYER_SPEED * (boosted ? 1.6 : 1);
-        const step = Math.min(dist, speed * delta);
-        this.player.position.x += (dx / dist) * step;
-        this.player.position.z += (dz / dist) * step;
-        this.player.rotation.y = Math.atan2(dx, dz);
-        this.resolveCollisions(this.player.position);
-      } else {
-        this.moveTarget = null;
-        if (this.onArrive) {
-          const fn = this.onArrive;
-          this.onArrive = null;
-          fn();
-        }
-      }
-    }
+    const moving = this.updateMovement(delta);
+    this.updateWalkAnimation(delta, moving);
 
     if (this.gem && !this.gemFound) {
       if (!this.reducedMotion) {
@@ -2685,6 +2683,91 @@ export class Village {
 
     this.updateAction(delta);
     this.updateClickMarker(delta);
+  }
+
+  // Moves the player toward the current target with eased acceleration and
+  // deceleration, and turns them smoothly to face the way they're heading.
+  // Returns true while actually moving so the walk animation can react.
+  private updateMovement(delta: number): boolean {
+    if (!this.moveTarget) {
+      this.currentSpeed = 0;
+      return false;
+    }
+
+    const dx = this.moveTarget.x - this.player.position.x;
+    const dz = this.moveTarget.y - this.player.position.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist <= 0.08) {
+      this.moveTarget = null;
+      this.currentSpeed = 0;
+      if (this.onArrive) {
+        const fn = this.onArrive;
+        this.onArrive = null;
+        fn();
+      }
+      return false;
+    }
+
+    const boosted = this.clock.elapsedTime < this.speedBoostUntil;
+    const maxSpeed = PLAYER_SPEED * (boosted ? 1.6 : 1);
+
+    // Ease up from a standstill and ease down over the last stretch, so starts
+    // and stops read as steps rather than an instant glide on and off.
+    const DECEL_RADIUS = 1.3;
+    const ACCEL = 22;
+    const wantSpeed = maxSpeed * Math.max(0.3, Math.min(1, dist / DECEL_RADIUS));
+    if (this.currentSpeed < wantSpeed) {
+      this.currentSpeed = Math.min(wantSpeed, this.currentSpeed + ACCEL * delta);
+    } else {
+      this.currentSpeed = Math.max(wantSpeed, this.currentSpeed - ACCEL * delta);
+    }
+
+    const step = Math.min(dist, this.currentSpeed * delta);
+    const nx = dx / dist;
+    const nz = dz / dist;
+    this.player.position.x += nx * step;
+    this.player.position.z += nz * step;
+
+    // Turn smoothly toward the heading instead of snapping instantly.
+    this.player.rotation.y = this.approachAngle(this.player.rotation.y, Math.atan2(nx, nz), delta);
+
+    this.resolveCollisions(this.player.position);
+    return this.currentSpeed > 0.2;
+  }
+
+  // Eases an angle toward a target heading, taking the shortest way around.
+  private approachAngle(current: number, target: number, delta: number): number {
+    let diff = target - current;
+    diff = Math.atan2(Math.sin(diff), Math.cos(diff)); // wrap to [-PI, PI]
+    return current + diff * (1 - Math.exp(-delta * 14));
+  }
+
+  // Grounds the character: swinging legs and counter-swinging arms with a small
+  // vertical bob while walking, settling back to a neutral stance when stopped.
+  private updateWalkAnimation(delta: number, moving: boolean) {
+    const toolBusy = !!this.pendingAction && this.pendingAction.started;
+
+    if (moving && !this.reducedMotion) {
+      // step faster the quicker we're moving
+      this.walkPhase += delta * (5 + this.currentSpeed * 1.3);
+      const swing = Math.sin(this.walkPhase) * 0.55;
+      this.playerLegL.rotation.x = swing;
+      this.playerLegR.rotation.x = -swing;
+      this.playerArmPivotL.rotation.x = -swing * 0.7;
+      if (!toolBusy) this.playerArmPivot.rotation.x = swing * 0.7;
+      // two foot-falls per stride give a gentle double bob
+      this.player.position.y = Math.abs(Math.sin(this.walkPhase)) * 0.045;
+      return;
+    }
+
+    // Settle limbs and height back to rest. The right arm is left alone while a
+    // tool swing owns it (that animation resets it when gathering ends).
+    const ease = 1 - Math.exp(-delta * 10);
+    this.playerLegL.rotation.x += -this.playerLegL.rotation.x * ease;
+    this.playerLegR.rotation.x += -this.playerLegR.rotation.x * ease;
+    this.playerArmPivotL.rotation.x += -this.playerArmPivotL.rotation.x * ease;
+    if (!toolBusy) this.playerArmPivot.rotation.x += -this.playerArmPivot.rotation.x * ease;
+    this.player.position.y += -this.player.position.y * ease;
   }
 
   // Continuous gathering: the player keeps swinging on their own, landing
@@ -2860,11 +2943,14 @@ export class Village {
 
   private updateCamera() {
     const target = this.player.position;
+    // Follow the player's ground position only; ignore the walk bob (y) so the
+    // camera stays steady instead of bouncing with every step.
+    const baseY = 0;
     const cx = target.x + this.camDistance * Math.cos(CAM_ELEVATION) * Math.sin(this.azimuth);
     const cz = target.z + this.camDistance * Math.cos(CAM_ELEVATION) * Math.cos(this.azimuth);
-    const cy = target.y + this.camDistance * Math.sin(CAM_ELEVATION);
+    const cy = baseY + this.camDistance * Math.sin(CAM_ELEVATION);
     this.camera.position.set(cx, cy, cz);
-    this.camera.lookAt(target.x, target.y + 1.1, target.z);
+    this.camera.lookAt(target.x, baseY + 1.1, target.z);
   }
 
   private tick() {
